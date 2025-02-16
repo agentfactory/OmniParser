@@ -1,13 +1,6 @@
-FROM continuumio/miniconda3
+FROM python:3.12-slim
 
 WORKDIR /app
-
-# Copy repository contents
-COPY . .
-
-# Create and activate conda environment
-RUN conda create -n "omni" python=3.12 -y
-SHELL ["conda", "run", "-n", "omni", "/bin/bash", "-c"]
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
@@ -15,9 +8,12 @@ RUN apt-get update && apt-get install -y \
     wget \
     && rm -rf /var/lib/apt/lists/*
 
+# Copy repository contents
+COPY . .
+
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
-RUN pip install --no-cache-dir huggingface-cli
+RUN pip install --no-cache-dir huggingface_hub
 
 # Create download script
 RUN echo 'from huggingface_hub import hf_hub_download\n\
@@ -45,4 +41,4 @@ RUN mkdir -p weights && \
 EXPOSE 7860
 
 # Start the Gradio server
-CMD ["conda", "run", "-n", "omni", "python", "gradio_demo.py"]
+CMD ["python", "gradio_demo.py"]
