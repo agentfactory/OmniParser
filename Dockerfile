@@ -1,6 +1,13 @@
-FROM python:3.12-slim
+FROM continuumio/miniconda3
 
 WORKDIR /app
+
+# Copy repository contents
+COPY . .
+
+# Create and activate conda environment
+RUN conda create -n "omni" python=3.12 -y
+SHELL ["conda", "run", "-n", "omni", "/bin/bash", "-c"]
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
@@ -8,23 +15,34 @@ RUN apt-get update && apt-get install -y \
     wget \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy repository contents
-COPY . .
-
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir huggingface-cli
+
+# Create download script
+RUN echo 'from huggingface_hub import hf_hub_download\n\
+files = [\n\
+    "icon_detect/train_args.yaml",\n\
+    "icon_detect/model.pt",\n\
+    "icon_detect/model.yaml",\n\
+    "icon_caption/config.json",\n\
+    "icon_caption/generation_config.json",\n\
+    "icon_caption/model.safetensors"\n\
+]\n\
+\n\
+for f in files:\n\
+    print(f"Downloading {f}")\n\
+    hf_hub_download("microsoft/OmniParser-v2.0", f, local_dir="weights")\n\
+' > download_weights.py
 
 # Create weights directory and download model weights
 RUN mkdir -p weights && \
+    python download_weights.py && \
     cd weights && \
-    rm -rf icon_detect icon_caption icon_caption_florence && \
-    pip install --no-cache-dir huggingface_hub && \
-    python -c "from huggingface_hub import hf_hub_download; \
-    for f in ['icon_detect/train_args.yaml', 'icon_detect/model.pt', 'icon_detect/model.yaml', \
-              'icon_caption/config.json', 'icon_caption/generation_config.json', 'icon_caption/model.safetensors']: \
-        hf_hub_download('microsoft/OmniParser-v2.0', f, local_dir='.')" && \
     mv icon_caption icon_caption_florence
 
-# Run the Gradio demo
+# Expose port for Gradio
 EXPOSE 7860
-CMD ["python", "gradio_demo.py"]
+
+# Start the Gradio server
+CMD ["conda", "run", "-n", "omni", "python", "gradio_demo.py"]
